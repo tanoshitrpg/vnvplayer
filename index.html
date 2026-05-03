@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Visual Novel Log Master v92</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;700&family=Nanum+Myeongjo&family=Courier+Prime&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style id="user-custom-css"></style>
+    <style>
+        :root {
+            --accent-color: #d1d1d1;
+            --cur-accent: #d1d1d1;
+            --box-accent: #d1d1d1;
+            --name-accent: #d1d1d1;
+            --icon-accent: #d1d1d1;
+            --box-opacity: 0.85;
+            --text-color: #ffffff;
+            --font-family: 'Noto Sans KR', sans-serif;
+            --name-font-family: 'Noto Sans KR', sans-serif;
+            --letter-spacing: -0.5px;
+            --line-height: 1.8;
+            --font-size: 1.25rem;
+            --name-font-size: 1.1rem;
+            --name-letter-spacing: -1.5px;
+            --bg-dim: 1;
+            --bg-blur: 0px;
+            --bg-saturate: 1;
+            --name-width: 160px;
+            --name-padding-v: 8px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body { background-color: #050505; font-family: var(--font-family); color: var(--text-color); overflow: hidden; height: 100vh; }
+        
+        #game-frame, #start-screen, .name-wrapper, #dialogue-area, #title-screen { user-select: none; -webkit-user-select: none; }
+        #history-panel, #config-panel, #save-panel { user-select: text !important; -webkit-user-select: text !important; }
+
+        /* 레이아웃 */
+        #main-container { width: 100%; height: 100%; position: relative; }
+        #start-screen { position: absolute; inset: 0; z-index: 9000; background: #0c0c0c; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow-y: auto; padding: 40px 0; }
+        #title-screen { position: absolute; inset: 0; z-index: 8000; background-size: cover; background-position: center; background-color: #111; display: none; flex-direction: column; justify-content: center; align-items: center; }
+        #game-frame { position: relative; width: 100%; height: 100%; display: none; overflow: hidden; }
+        #game-frame.edit-active { border: 3px solid #ff4d4d; }
+
+        /* 레이어 */
+        #bg-layer { position: absolute; inset: 0; background-size: cover; background-position: center; filter: brightness(var(--bg-dim)) blur(var(--bg-blur)) saturate(var(--bg-saturate)); transition: 1s ease; z-index: 1; }
+        #cg-layer { position: absolute; inset: 0; background-size: contain; background-repeat: no-repeat; background-position: center; background-color: rgba(0,0,0,0.85); z-index: 40; display: none; }
+        #character-layer { position: absolute; inset: 0; display: flex; justify-content: center; align-items: flex-end; z-index: 10; pointer-events: none; }
+        #char-standing { height: 96%; max-width: 90%; object-fit: contain; opacity: 0; transition: 0.4s ease; transform-origin: bottom center; }
+        #char-standing.active { opacity: 1; }
+
+        /* 대사창 10종 */
+        #dialogue-area { position: absolute; bottom: 0; left: 0; width: 100%; height: 35%; z-index: 100; padding: 0 5% 40px 5%; cursor: pointer; display: flex; flex-direction: column; justify-content: flex-end; }
+        #dialogue-box { width: 100%; height: 100%; padding: 40px 60px; position: relative; }
+        #text-content { white-space: pre-wrap; word-break: break-all; font-size: var(--font-size); line-height: var(--line-height); letter-spacing: var(--letter-spacing); }
+
+        .box-modern { border-top: 4px solid var(--box-accent); background: linear-gradient(rgba(25,25,30, var(--box-opacity)), rgba(5,5,8,0.98)); }
+        .box-glass { background: rgba(255,255,255,0.1); backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.2); border-radius: 20px; }
+        .box-cyber { background: rgba(0,15,30,0.9); border: 2px solid var(--box-accent); clip-path: polygon(0 15%, 3% 0, 100% 0, 100% 85%, 97% 100%, 0 100%); }
+        .box-classic { background: #000; border: 5px double var(--box-accent); }
+        .box-minimal { background: rgba(0,0,0,0.7); border-left: 15px solid var(--box-accent); }
+        .box-antique { background: #221a15; border: 3px solid #5d4037; border-radius: 10px; box-shadow: inset 0 0 40px #000; }
+        .box-neon { background: rgba(0,0,0,0.95); border: 1px solid var(--box-accent); box-shadow: 0 0 20px var(--box-accent); }
+        .box-paper { background: #f2e1c1; color: #333 !important; border: 1px solid #d4a373; border-radius: 3px; }
+        .box-terminal { background: #050a05; border: 1px solid #00ff00; font-family: 'Courier Prime', monospace !important; }
+        .box-shadow { background: linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0) 100%); border: none !important; }
+
+        /* 이름창 10종 */
+        .name-wrapper { position: relative; width: 100%; height: 0; z-index: 120; }
+        #name-tag { position: absolute; bottom: 12px; left: 25px; min-width: var(--name-width); padding: var(--name-padding-v) 30px; font-weight: 700; text-align: center; }
+        .name-tag { background: var(--cur-accent); color: #000; }
+        .name-ribbon { background: #000; color: var(--cur-accent); border-bottom: 4px solid var(--cur-accent); }
+        .name-floating { background: none; color: var(--cur-accent); font-size: 1.8rem; text-shadow: 2px 2px 5px #000; text-align: left; }
+        .name-badge { background: #fff; color: #000; border-radius: 50px; border: 2.5px solid var(--cur-accent); }
+        .name-neon { border: 1px solid var(--cur-accent); color: var(--cur-accent); background: #000; text-shadow: 0 0 10px var(--cur-accent); }
+        .name-diamond { background: var(--cur-accent); color: #000; clip-path: polygon(10% 0, 100% 0, 90% 100%, 0 100%); }
+        .name-underline { border-bottom: 5px solid var(--cur-accent); text-align: left; padding-left: 0; border-radius: 0; }
+        .name-bracket { background: none; color: #fff; } .name-bracket::before { content: '【 '; color: var(--cur-accent); } .name-bracket::after { content: ' 】'; color: var(--cur-accent); }
+        .name-side { border-left: 10px solid var(--cur-accent); background: rgba(0,0,0,0.6); text-align: left; padding-left: 15px; }
+        .name-gradient { background: linear-gradient(90deg, var(--cur-accent) 0%, transparent 100%); color: #000; text-align: left; border: none; }
+
+        /* NEXT 아이콘 10종 */
+        #next-icon { position: absolute; bottom: 25px; right: 35px; width: 18px; height: 18px; background: var(--icon-accent); animation: bounce 0.8s infinite; }
+        .icon-down { clip-path: polygon(100% 0, 0 0, 50% 100%); }
+        .icon-diamond { transform: rotate(45deg); clip-path: none !important; border-radius: 0; }
+        .icon-circle { border-radius: 50%; clip-path: none !important; }
+        .icon-right { clip-path: polygon(100% 50%, 0 0, 0 100%); }
+        .icon-square { clip-path: none !important; border-radius: 0; }
+        .icon-star { clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+        .icon-plus { clip-path: polygon(10% 40%, 40% 40%, 40% 10%, 60% 10%, 60% 40%, 90% 40%, 90% 60%, 60% 60%, 60% 90%, 40% 90%, 40% 60%, 10% 60%); }
+        .icon-heart { background: #ff4d4d !important; clip-path: polygon(50% 15%, 80% 0, 100% 20%, 100% 50%, 50% 100%, 0 50%, 0 20%, 20% 0); }
+        .icon-dots { background: none !important; border-radius: 0; clip-path: none !important; width: auto !important; height: auto !important; } 
+        .icon-dots::before { content: '...'; color: var(--icon-accent); font-weight: bold; font-size: 24px; line-height: 0; display: block; text-align: center; }
+        .icon-cross { clip-path: polygon(20% 0%, 0% 20%, 30% 50%, 0% 80%, 20% 100%, 50% 70%, 80% 100%, 100% 80%, 70% 50%, 100% 20%, 80% 0%, 50% 30%); }
+
+        @keyframes bounce { 0%, 100% { transform: translateY(0); opacity: 0.6; } 50% { transform: translateY(6px); opacity: 1; } }
+
+        /* 패널 디자인 */
+        .side-panel { position: fixed; top: 0; right: -100%; width: 100%; max-width: 500px; height: 100%; background: rgba(10,10,15,0.98); backdrop-filter: blur(25px); z-index: 2000; transition: 0.4s cubic-bezier(0.16, 1, 0.3, 1); padding: 30px; overflow-y: auto; border-left: 1px solid #333; }
+        .side-panel.open { right: 0; }
+        .setting-card { background: #18181d; padding: 20px; border-radius: 15px; margin-bottom: 20px; border: 1px solid #2a2a30; }
+        .setting-card h3 { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        input, select { width: 100%; padding: 10px; background: #0a0a0c; border: 1px solid #333; color: #fff; border-radius: 8px; font-size: 13px; margin-bottom: 10px; }
+        .control-btn { background: rgba(255,255,255,0.08); border: 1px solid #444; color: #fff; padding: 12px 22px; border-radius: 30px; cursor: pointer; font-size: 11px; font-weight: bold; transition: 0.3s; }
+        .control-btn:hover { background: var(--accent-color); color: #000; }
+
+        .project-item { background: #1a1a20; padding: 18px; margin-bottom: 12px; border-radius: 12px; border: 1px solid #333; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: 0.2s; }
+        .project-item:hover { background: #25252d; border-color: var(--accent-color); transform: translateX(5px); }
+
+        .history-item { display: grid; grid-template-columns: 50px 100px 1fr; gap: 10px; padding: 15px; border-bottom: 1px solid #222; cursor: pointer; }
+        .history-idx { color: #555; font-family: monospace; font-size: 11px; }
+
+        @media (max-aspect-ratio: 1/1) { .side-panel { max-width: 100%; } }
+    </style>
+</head>
+<body>
+
+<div id="main-container" onclick="handleBgClick(event)">
+    <!-- 1. 시작 화면 -->
+    <div id="start-screen">
+        <h1 style="color:#fff; letter-spacing: 15px; font-weight: 300; margin-bottom: 40px;">VN LOG PLAYER</h1>
+        <div id="upload-box" style="background:#16161a; padding:40px; border-radius:30px; width:90%; max-width:620px; border: 1px solid #222; box-shadow: 0 20px 50px #000;">
+            <div style="background:#0a0a0c; padding:30px; border-radius:20px; margin-bottom:30px;">
+                <input type="file" id="log-input" accept=".html,.zip" style="margin-bottom:20px;">
+                <button id="start-btn" class="control-btn" style="width:100%; padding:18px; font-size:14px;" onclick="processLog()">엔진 기동</button>
+            </div>
+            <h3 style="color:#555; font-size:11px; margin-bottom:15px; text-transform:uppercase; letter-spacing:2px;">최근 불러온 세션</h3>
+            <div id="project-list" style="text-align:left; max-height: 250px; overflow-y: auto;"></div>
+            <div id="load-info" style="display:none; margin-top:20px;">
+                <div style="width:100%; height:4px; background:#222;"><div id="load-progress" style="width:0%; height:100%; background:var(--accent-color);"></div></div>
+                <p id="count-text" style="color:#666; font-size:11px; margin-top:10px; text-align:center;">분석 중...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 타이틀 화면 -->
+    <div id="title-screen">
+        <h1 id="title-display" style="font-size:3.5rem; letter-spacing:15px; margin-bottom:50px; text-shadow: 0 0 20px #000;">SESSION</h1>
+        <div style="display:flex; flex-direction:column; gap:15px; width:280px;">
+            <button class="control-btn" onclick="startGameAt(0)">NEW START</button>
+            <button class="control-btn" id="resume-btn" onclick="resumeGame()">CONTINUE</button>
+            <button class="control-btn" onclick="togglePanel('config-panel')">SETTINGS</button>
+            <button class="control-btn" onclick="goHome()">EXIT</button>
+        </div>
+    </div>
+
+    <!-- 3. 게임 프레임 -->
+    <div id="game-frame" onmousedown="handleMouseDown(event)" onmouseup="handleMouseUp(event)" oncontextmenu="return false;">
+        <div id="bg-layer"></div>
+        <div id="cg-layer" onclick="this.style.display='none'"></div>
+        <div id="character-layer"><img id="char-standing" src=""></div>
+
+        <div id="ui-top" style="position:absolute; top:20px; right:20px; z-index:1000; display:flex; gap:10px;">
+            <button id="mode-btn" class="control-btn" onclick="toggleEditMode(event)">READ MODE</button>
+            <button class="control-btn" onclick="togglePanel('save-panel', event)">SAVE/LOAD</button>
+            <button class="control-btn" onclick="togglePanel('history-panel', event)">LOG</button>
+            <button class="control-btn" onclick="togglePanel('config-panel', event)">CONFIG</button>
+            <button class="control-btn" onclick="goHome()" style="background:rgba(255,255,255,0.1)">HOME</button>
+        </div>
+
+        <div id="dialogue-area">
+            <div class="name-wrapper"><div id="name-tag" class="name-tag">System</div></div>
+            <div id="dialogue-box" class="box-modern">
+                <div id="text-content"></div>
+                <div id="next-icon" class="icon-down"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 패널들 -->
+<div id="save-panel" class="side-panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
+        <h2>SAVE & LOAD</h2><button class="control-btn" onclick="togglePanel('save-panel')">CLOSE</button>
+    </div>
+    <div id="save-slots-container"></div>
+</div>
+
+<div id="config-panel" class="side-panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
+        <h2>SETTINGS</h2><button class="control-btn" onclick="togglePanel('config-panel')">CLOSE</button>
+    </div>
+
+    <div class="setting-card editor-only" id="director-tools" style="display:none; border-color: #ff4d4d;">
+        <h3 style="color:#ff4d4d;">🎬 SCENE DIRECTOR</h3>
+        <label>현재 컷 연출</label>
+        <input type="file" accept="audio/*" onchange="applyAsset('bgm', this)">
+        <input type="file" accept="image/*" onchange="applyAsset('bg', this)">
+        <hr style="border:0; border-top:1px solid #333; margin:15px 0;">
+        <label>구간 일괄 적용 (번호 기준)</label>
+        <div style="display:flex; gap:5px; margin-bottom:10px;">
+            <input type="number" id="batch-start" placeholder="From">
+            <input type="number" id="batch-end" placeholder="To">
+        </div>
+        <button class="control-btn" style="width:100%; margin-bottom:5px;" onclick="applyBatchDirecting('bg')">현재 배경 구간 복사</button>
+        <button class="control-btn" style="width:100%;" onclick="applyBatchDirecting('bgm')">현재 BGM 구간 복사</button>
+        <br><br>
+        <button class="control-btn" style="width:100%; background:#ff4d4d;" onclick="saveProjectData(true)">전체 연출 저장</button>
+        <button class="control-btn" style="width:100%; margin-top:5px; background:#444;" onclick="exportProjectZip()">ZIP 패키지 내보내기</button>
+    </div>
+
+    <div class="setting-card">
+        <h3>Typography Styles</h3>
+        <label>글자 크기 (rem)</label>
+        <input type="range" min="0.8" max="2.5" step="0.05" id="val-font-size" value="1.25" oninput="updateUI()">
+        <label>줄 간격 (행간)</label>
+        <input type="range" min="1.0" max="3.0" step="0.1" id="val-line-height" value="1.8" oninput="updateUI()">
+        <label>글자 간격 (자간)</label>
+        <input type="range" min="-3" max="10" step="0.5" id="val-letter-spacing" value="-0.5" oninput="updateUI()">
+        <label>본문 폰트</label>
+        <input type="text" id="font-name" placeholder="Noto Sans KR" onchange="updateUI()">
+        <label>이름 폰트</label>
+        <input type="text" id="name-font-name" placeholder="Noto Sans KR" onchange="updateUI()">
+    </div>
+
+    <div class="setting-card">
+        <h3>UI Design & Presets</h3>
+        <label>이름칸 가로 / 높이</label>
+        <input type="range" min="100" max="600" value="160" oninput="document.documentElement.style.setProperty('--name-width', this.value+'px')">
+        <input type="range" min="0" max="40" value="8" oninput="document.documentElement.style.setProperty('--name-padding-v', this.value+'px')">
+        
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:5px; margin-top:10px;">
+            <input type="color" id="p-box-acc" value="#d1d1d1" oninput="updateUI()">
+            <input type="color" id="p-name-acc" value="#d1d1d1" oninput="updateUI()">
+            <input type="color" id="p-icon-acc" value="#d1d1d1" oninput="updateUI()">
+        </div>
+        <select id="sel-box" onchange="updateUI()">
+            <option value="box-modern">Box: Modern</option><option value="box-glass">Box: Glass</option><option value="box-cyber">Box: Cyber</option>
+            <option value="box-classic">Box: Classic</option><option value="box-minimal">Box: Minimal</option><option value="box-antique">Box: Antique</option>
+            <option value="box-neon">Box: Neon</option><option value="box-paper">Box: Paper</option><option value="box-terminal">Box: Terminal</option><option value="box-shadow">Box: Shadow</option>
+        </select>
+        <select id="sel-name" onchange="updateUI()">
+            <option value="name-tag">Name: Box</option><option value="name-ribbon">Name: Ribbon</option><option value="name-floating">Name: Floating</option>
+            <option value="name-badge">Name: Badge</option><option value="name-neon">Name: Neon</option><option value="name-diamond">Name: Diamond</option>
+            <option value="name-underline">Name: Underline</option><option value="name-bracket">Name: Bracket</option><option value="name-side">Name: Side</option><option value="name-gradient">Name: Gradient</option>
+        </select>
+        <select id="sel-icon" onchange="updateUI()">
+            <option value="icon-down">Icon: Down</option><option value="icon-diamond">Icon: Diamond</option><option value="icon-circle">Icon: Circle</option>
+            <option value="icon-right">Icon: Right</option><option value="icon-square">Icon: Square</option><option value="icon-star">Icon: Star</option>
+            <option value="icon-plus">Icon: Plus</option><option value="icon-heart">Icon: Heart</option><option value="icon-dots">Icon: Dots</option><option value="icon-cross">Icon: Cross</option>
+        </select>
+    </div>
+
+    <div class="setting-card">
+        <h3>Background Filters</h3>
+        <label>밝기 / 채도 / 블러</label>
+        <input type="range" min="0" max="1.5" step="0.05" value="1" oninput="document.documentElement.style.setProperty('--bg-dim', this.value); updateUI();">
+        <input type="range" min="0" max="2" step="0.05" value="1" oninput="document.documentElement.style.setProperty('--bg-saturate', this.value); updateUI();">
+        <input type="range" id="p-blur" min="0" max="25" value="0" oninput="updateUI()">
+        <label>기본 배경 이미지 설정</label>
+        <input type="file" accept="image/*" onchange="loadGlobalBG(this)">
+    </div>
+
+    <div class="setting-card"><h3>Character List</h3><div id="char-settings-list"></div></div>
+</div>
+
+<div id="history-panel" class="side-panel">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2>HISTORY</h2><button class="control-btn" onclick="togglePanel('history-panel')">CLOSE</button>
+    </div>
+    <input type="text" id="log-search" placeholder="Search log..." oninput="renderHistory()">
+    <div id="history-content"></div>
+</div>
+
+<audio id="audio-bgm" loop></audio>
+
+<script>
+    let db, currentProject = { id: null, title: "", logs: [], actors: {}, directing: {}, lastPos: 0, saveSlots: Array(8).fill(null) };
+    let frames = [], currentIndex = -1, isTyping = false, typeTimer = null, editMode = false;
+    let charLastImg = {}, assetFiles = new Map(), skipTimer = null;
+
+    const NARRATORS = new Set(["System", "나레이션", "나레이터", "■", "-", "NONAME", "...", "알림", "정보", "GM", "진행", "시스템"]);
+    const PAGE_LIMIT = 280;
+
+    // --- 1. DB 초기화 ---
+    const request = indexedDB.open("VN_LOG_MASTER_V92", 1);
+    request.onupgradeneeded = (e) => { e.target.result.createObjectStore("projects", { keyPath: "id" }); };
+    request.onsuccess = (e) => { db = e.target.result; displayProjectList(); };
+
+    // --- 2. 파싱 로직 (이어 보기 지원) ---
+    async function processLog() {
+        const fileInput = document.getElementById('log-input');
+        if(!fileInput.files[0]) return alert("파일을 선택하세요.");
+        const file = fileInput.files[0];
+        document.getElementById('start-btn').disabled = true;
+        document.getElementById('load-info').style.display = 'block';
+
+        const fileTitle = file.name.replace('.html', '').replace('.zip', '');
+
+        // 1. 이미 동일한 제목의 프로젝트가 있는지 DB에서 확인 (HTML인 경우만)
+        if(!file.name.endsWith('.zip')) {
+            const tx = db.transaction("projects", "readonly");
+            const store = tx.objectStore("projects");
+            const all = await new Promise(r => { store.getAll().onsuccess = (e) => r(e.target.result); });
+            const existing = all.find(p => p.title === fileTitle);
+            if(existing) {
+                if(confirm(`'${fileTitle}' 로그를 이전에 읽은 기록이 있습니다. 이어 보시겠습니까? (취소 시 새로 분석)`)) {
+                    startProject(existing, false); return;
+                }
+            }
+        }
+
+        // 2. ZIP 파일 처리
+        if(file.name.endsWith('.zip')) {
+            const zip = await JSZip.loadAsync(file);
+            const projData = JSON.parse(await zip.file("project.json").async("string"));
+            for(const idx in projData.directing) {
+                const d = projData.directing[idx];
+                if(d.bgName) d.bg = URL.createObjectURL(await zip.file(`assets/${d.bgName}`).async("blob"));
+                if(d.bgmName) d.bgm = URL.createObjectURL(await zip.file(`assets/${d.bgmName}`).async("blob"));
+            }
+            startProject(projData, true); return;
+        }
+
+        // 3. 신규 HTML 파싱
+        const text = await file.text();
+        const doc = new DOMParser().parseFromString(text, 'text/html');
+        const rows = Array.from(doc.getElementsByClassName('gap'));
+        if(rows.length === 0) { alert("로그 형식이 올바르지 않습니다."); location.reload(); return; }
+
+        let proj = { id: "PRJ_"+Date.now(), title: fileTitle, logs: [], actors: {}, directing: {}, lastPos: 0, saveSlots: Array(8).fill(null) };
+
+        for(let i=0; i<rows.length; i++) {
+            const row = rows[i];
+            const nameSpan = row.querySelector('span[style*="bold"]');
+            let name = nameSpan ? nameSpan.innerText.trim() : "System";
+            const img = row.querySelector('img')?.src || "";
+            const p = row.querySelector('p');
+            let dText = "";
+            if(p) {
+                const spans = p.querySelectorAll('span');
+                dText = spans.length > 0 ? spans[spans.length-1].textContent : p.textContent.replace(name, "");
+            }
+            dText = dText.trim();
+            if(!dText || dText === "-") continue;
+            if(row.innerText.includes("＞")) name = "System";
+            if(!NARRATORS.has(name) && !proj.actors[name]) { proj.actors[name] = { color: '#d1d1d1', show: true, scale: 1, x: 0, y: 0 }; }
+
+            if(dText.length > PAGE_LIMIT) {
+                const chunks = dText.match(new RegExp(`.{1,${PAGE_LIMIT}}`, 'g')) || [dText];
+                chunks.forEach(c => proj.logs.push({ name, text: c, img, orgIdx: i }));
+            } else { proj.logs.push({ name, text: dText, img, orgIdx: i }); }
+
+            if(i % 100 === 0) {
+                document.getElementById('load-progress').style.width = (i/rows.length*100)+'%';
+                await new Promise(r => setTimeout(r, 0));
+            }
+        }
+        db.transaction("projects", "readwrite").objectStore("projects").put(proj).onsuccess = () => startProject(proj, false);
+    }
+
+    function startProject(proj, isZip) {
+        currentProject = proj; frames = proj.logs;
+        document.getElementById('start-screen').style.display = 'none';
+        if(isZip) {
+            document.getElementById('title-screen').style.display = 'flex';
+            document.getElementById('title-display').innerText = proj.title;
+        } else { startGameAt(currentProject.lastPos || 0); }
+        buildCharSettingsUI(); updateUI(); createSaveSlots();
+    }
+
+    function startGameAt(idx) {
+        currentIndex = idx;
+        document.getElementById('title-screen').style.display = 'none';
+        document.getElementById('game-frame').style.display = 'block';
+        render();
+    }
+
+    function resumeGame() { startGameAt(currentProject.lastPos || 0); }
+
+    function render() {
+        if (!frames[currentIndex]) return;
+        const f = frames[currentIndex];
+        applyDirectingState(currentIndex);
+        const config = currentProject.actors[f.name] || { color: '#d1d1d1', show: true, scale: 1, x: 0, y: 0 };
+        document.documentElement.style.setProperty('--cur-accent', config.color);
+        document.getElementById('name-tag').innerText = f.name;
+        document.getElementById('name-tag').style.display = NARRATORS.has(f.name) ? 'none' : 'block';
+        const img = f.img || charLastImg[f.name] || "";
+        if(f.img) charLastImg[f.name] = f.img;
+        const std = document.getElementById('char-standing');
+        if(config.show && img) {
+            std.style.transform = `translate(${config.x}px, ${config.y}px) scale(${config.scale})`;
+            if(std.src !== img) { std.classList.remove('active'); setTimeout(()=> { std.src=img; std.classList.add('active'); }, 50); }
+            else std.classList.add('active');
+        } else std.classList.remove('active');
+        startType(f.text);
+        currentProject.lastPos = currentIndex;
+        saveProjectData(); // 매 컷마다 자동 저장
+    }
+
+    function startType(t) {
+        const el = document.getElementById('text-content');
+        if(typeTimer) clearInterval(typeTimer);
+        el.textContent = ""; isTyping = true;
+        let i = 0;
+        typeTimer = setInterval(() => {
+            if(!isTyping) { el.textContent = t; clearInterval(typeTimer); return; }
+            el.textContent += t[i++];
+            if(i >= t.length) { isTyping = false; clearInterval(typeTimer); }
+        }, 20);
+    }
+
+    // --- 조작 로직 ---
+    function handleMouseDown(e) {
+        if(e.button === 2) { 
+            skipTimer = setInterval(() => { if(currentIndex < frames.length - 1) { currentIndex++; render(); isTyping = false; } }, 50);
+        } else if(e.button === 0) {
+            if(document.querySelector('.side-panel.open')) return;
+            if(isTyping) isTyping = false;
+            else if(currentIndex < frames.length - 1) { currentIndex++; render(); }
+        }
+    }
+    function handleMouseUp(e) { if(skipTimer) { clearInterval(skipTimer); skipTimer = null; } }
+    function handleBgClick(e) {
+        if(e.target.id === "main-container" || e.target.id === "bg-layer") {
+            document.querySelectorAll('.side-panel').forEach(p => p.classList.remove('open'));
+        }
+    }
+
+    function applyAsset(type, input) {
+        const file = input.files[0]; if(!file) return;
+        const url = URL.createObjectURL(file);
+        const aName = `A_${Date.now()}_${file.name}`;
+        assetFiles.set(aName, file);
+        if(!currentProject.directing[currentIndex]) currentProject.directing[currentIndex] = {};
+        if(type==='bgm') { currentProject.directing[currentIndex].bgm = url; currentProject.directing[currentIndex].bgmName = aName; }
+        if(type==='bg') { currentProject.directing[currentIndex].bg = url; currentProject.directing[currentIndex].bgName = aName; }
+        render();
+    }
+
+    function applyBatchDirecting(type) {
+        const start = parseInt(document.getElementById('batch-start').value);
+        const end = parseInt(document.getElementById('batch-end').value);
+        if(isNaN(start) || isNaN(end)) return alert("번호를 입력하세요.");
+        const source = currentProject.directing[currentIndex];
+        if(!source) return alert("현재 대사에 연출을 먼저 지정하세요.");
+        for(let i=start; i<=end; i++) {
+            if(!currentProject.directing[i]) currentProject.directing[i] = {};
+            if(type==='bg') { currentProject.directing[i].bg = source.bg; currentProject.directing[i].bgName = source.bgName; }
+            if(type==='bgm') { currentProject.directing[i].bgm = source.bgm; currentProject.directing[i].bgmName = source.bgmName; }
+        }
+        alert("일괄 적용 완료.");
+    }
+
+    function applyDirectingState(idx) {
+        let b=null, g=null;
+        for(let i=0; i<=idx; i++) {
+            if(currentProject.directing[i]?.bgm) b = currentProject.directing[i].bgm;
+            if(currentProject.directing[i]?.bg) g = currentProject.directing[i].bg;
+        }
+        const audio = document.getElementById('audio-bgm');
+        if(b && audio.src !== b) { audio.src = b; audio.play().catch(()=>{}); }
+        if(g) document.getElementById('bg-layer').style.backgroundImage = `url(${g})`;
+    }
+
+    async function exportProjectZip() {
+        const zip = new JSZip();
+        zip.file("project.json", JSON.stringify(currentProject));
+        const assets = zip.folder("assets");
+        for(const [name, file] of assetFiles) assets.file(name, file);
+        const blob = await zip.generateAsync({type:"blob"});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+        a.download = `${currentProject.title}_package.zip`; a.click();
+    }
+
+    function updateUI() {
+        const r = document.documentElement.style;
+        r.setProperty('--box-accent', document.getElementById('p-box-acc').value);
+        r.setProperty('--name-accent', document.getElementById('p-name-acc').value);
+        r.setProperty('--icon-accent', document.getElementById('p-icon-acc').value);
+        r.setProperty('--bg-blur', document.getElementById('p-blur').value + 'px');
+        r.setProperty('--font-size', document.getElementById('val-font-size').value + 'rem');
+        r.setProperty('--line-height', document.getElementById('val-line-height').value);
+        r.setProperty('--letter-spacing', document.getElementById('val-letter-spacing').value + 'px');
+        r.setProperty('--font-family', `'${document.getElementById('font-name').value}', sans-serif`);
+        r.setProperty('--name-font-family', `'${document.getElementById('name-font-name').value}', sans-serif`);
+        document.getElementById('dialogue-box').className = document.getElementById('sel-box').value;
+        document.getElementById('name-tag').className = 'name-tag ' + document.getElementById('sel-name').value;
+        document.getElementById('next-icon').className = 'icon-down ' + document.getElementById('sel-icon').value;
+    }
+
+    function renderHistory() {
+        const q = document.getElementById('log-search').value.toLowerCase();
+        const h = document.getElementById('history-content');
+        h.innerHTML = frames.filter(f => !q || f.text.toLowerCase().includes(q) || f.name.toLowerCase().includes(q))
+            .map(f => { const idx = frames.indexOf(f); return `<div class="history-item" onclick="jumpTo(${idx})"><div class="history-idx">#${idx}</div><div style="font-size:11px; color:${currentProject.actors[f.name]?.color}">${f.name}</div><div style="font-size:13px;">${f.text}</div></div>`; }).reverse().join('');
+    }
+
+    function toggleEditMode(e) {
+        e.stopPropagation(); editMode = !editMode;
+        document.getElementById('game-frame').classList.toggle('edit-active');
+        document.getElementById('mode-btn').innerText = editMode ? "DIRECTOR MODE" : "READ MODE";
+        document.getElementById('director-tools').style.display = editMode ? 'block' : 'none';
+    }
+
+    function buildCharSettingsUI() {
+        const list = document.getElementById('char-settings-list');
+        list.innerHTML = Object.keys(currentProject.actors).map(name => {
+            const c = currentProject.actors[name];
+            return `<div style="background:#111; padding:12px; border-radius:12px; margin-bottom:8px; font-size:12px; border:1px solid #222;"><b>${name}</b><div style="display:flex; gap:8px; margin-top:8px; align-items:center;"><input type="color" value="${c.color}" oninput="currentProject.actors['${name}'].color=this.value; updateUI();" style="width:30px; height:25px; padding:0; border:none;">S<input type="number" step="0.1" value="${c.scale}" oninput="currentProject.actors['${name}'].scale=this.value; render();" style="width:45px; margin:0;">X<input type="number" value="${c.x}" oninput="currentProject.actors['${name}'].x=this.value; render();" style="width:45px; margin:0;">Y<input type="number" value="${c.y}" oninput="currentProject.actors['${name}'].y=this.value; render();" style="width:45px; margin:0;"></div></div>`;
+        }).join('');
+    }
+
+    function jumpTo(idx) { currentIndex = idx; isTyping = false; render(); }
+    function togglePanel(id, e) { if(e) e.stopPropagation(); document.querySelectorAll('.side-panel').forEach(p => p.id !== id && p.classList.remove('open')); document.getElementById(id).classList.toggle('open'); if(id === 'history-panel') renderHistory(); }
+    function goHome() { if(confirm("초기 화면으로 돌아갈까요?")) location.reload(); }
+    function loadGlobalBG(input) { document.getElementById('bg-layer').style.backgroundImage = `url(${URL.createObjectURL(input.files[0])})`; }
+    async function saveProjectData() { db.transaction("projects", "readwrite").objectStore("projects").put(currentProject); }
+    
+    function displayProjectList() { 
+        const tx = db.transaction("projects", "readonly"); 
+        tx.objectStore("projects").getAll().onsuccess = (e) => {
+            const list = e.target.result;
+            document.getElementById('project-list').innerHTML = list.length === 0 ? "<p style='color:#444; font-size:12px; text-align:center;'>저장된 세션이 없습니다.</p>" : list.map(p => {
+                const progress = Math.floor((p.lastPos / p.logs.length) * 100);
+                return `<div class="project-item" onclick="loadStoredProject('${p.id}')">
+                    <div style="text-align:left;"><b>${p.title}</b><br><small style="color:#666;">진행률: ${progress}% (${p.lastPos}/${p.logs.length})</small></div>
+                    <button class="control-btn" style="padding:5px 12px; font-size:9px; background:rgba(255,50,50,0.1);" onclick="deleteProject(event, '${p.id}')">삭제</button>
+                </div>`;
+            }).reverse().join('');
+        };
+    }
+
+    window.loadStoredProject = (id) => { db.transaction("projects", "readonly").objectStore("projects").get(id).onsuccess = (e) => startProject(e.target.result, true); };
+    
+    window.deleteProject = (e, id) => {
+        e.stopPropagation();
+        if(confirm("이 세션 기록을 삭제할까요?")) {
+            db.transaction("projects", "readwrite").objectStore("projects").delete(id).onsuccess = () => displayProjectList();
+        }
+    }
+
+    function createSaveSlots() {
+        const container = document.getElementById('save-slots-container'); container.innerHTML = "";
+        for(let i=0; i<8; i++) {
+            const slot = document.createElement('div'); const d = currentProject.saveSlots[i];
+            slot.style = "background:#111; padding:15px; border:1px solid #333; margin-bottom:10px; border-radius:10px; cursor:pointer;";
+            slot.innerHTML = d ? `<b>SLOT ${i+1}</b><br><small>${d.date}</small>` : `SLOT ${i+1} (EMPTY)`;
+            slot.onclick = () => { if(confirm("저장하시겠습니까?")) { currentProject.saveSlots[i] = { pos: currentIndex, date: new Date().toLocaleString() }; saveProjectData(); createSaveSlots(); } else if(d) { currentIndex = d.pos; render(); togglePanel('save-panel'); } };
+            container.appendChild(slot);
+        }
+    }
+    window.addEventListener('keydown', (e) => { if(e.code === "Space" || e.code === "Enter") { if(currentIndex < frames.length-1){currentIndex++; render();} } });
+</script>
+</body>
+</html>
